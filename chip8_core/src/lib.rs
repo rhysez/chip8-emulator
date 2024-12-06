@@ -8,7 +8,7 @@ const NUM_KEYS: usize = 16;
 const START_ADDR: u16 = 0x200; // The memory address of the first byte. 
 const FONTSET_SIZE: usize = 80;
 
-// Character sprite data
+// Character sprite data using hexadecimal numbers.
 const FONTSET: [u8; FONTSET_SIZE] = [
     0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
     0x20, 0x60, 0x20, 0x20, 0x70, // 1
@@ -101,13 +101,16 @@ impl Emu {
         self.execute(op);
     }
 
-    // Fetches a value (opcode) stored at the specified memory address in Program Counter.
+    // Fetches the opcode stored at the specified memory address in Program Counter.
     // This function does not need to be public because it is only accessed within the Emu object.
     fn fetch(&mut self) -> u16 {
         // We get 
         let higher_byte = self.ram[self.pc as usize] as u16;
         let lower_byte = self.ram[(self.pc + 1) as usize] as u16;
 
+        // We use a left shift bitwise operator here (<<).
+        // This shifts the bits of a number to the left by a specified amount.
+        // For each number we shift, this is equivalent to multiplying that number by 2.
         let op = (higher_byte << 8) | lower_byte; // We combine the higher and lower bytes to form an opcode.
         self.pc += 2; // We move the PC up by 2 bytes because every opcode will be 2 bytes in size.
         
@@ -130,13 +133,39 @@ impl Emu {
     }
 
     fn execute(&mut self, op: u16) {
+        // We use the right shift bitwise operator here (>>).
+        // This shifts a values bits to the right by a specified amount.
+        // Here we are getting each digit in the opcode,
+        // and shifting them right by the amount we specify.
+        // For each number we specify, this is equivalent to dividing the number by 2 (cut in half).
+
+        // We also use the bitwise AND operator (&).
+        // This compares two numbers in binary format (e.g 0000 0101) and gets all shared bits (where the bit is 1) between both numbers.
+        // For example, if we compared 0000 0101 with 0000 0011, the result would be 0000 0001. 
+        // Because this is the only shared 1 between both numbers.
+
+        // In this function, we get each digit in the opcode.
+        // (op & 0xF000) gives us the first digit, for example.
         let digit1 = (op & 0xF000) >> 12;
         let digit2 = (op & 0x0F00) >> 8;
         let digit3 = (op & 0x00F0) >> 4;
         let digit4 = op & 0x000F;
 
+        // Now that we have digits 1 through 4, we handle them based on the opcode they create.
         match (digit1, digit2, digit3, digit4) {
-            (_, _, _, _) => unimplemented!("Unimplemented opcode: {}", op),
+            (0, 0, 0, 0) => return, // If all digits are 0, do nothing
+            (_, _, _, _) => unimplemented!("Unimplemented opcode: {}", op), // If digits are not valid, panic
+            (0, 0, 0xE, 0) => { // 000E0 clears the screen.
+                self.screen = [false; SCREEN_WIDTH * SCREEN_HEIGHT]
+            },
+            (0, 0, 0xE, 0xE) => { // 000EE returns from subroutine.
+                let ret_addr = self.pop(); // Runs subroutine from top of stack.
+                self.pc = ret_addr; // Returns the PC to the next item after popping.
+            },
+            (1, _, _, _) => { // 1NNN jumps.
+                let nnn = op & 0xFFF;
+                self.pc = nnn;
+            },
         }
     }
 }
